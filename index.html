@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Veille : copier le commentaire</title>
+<style>
+  /* Page de copie de la veille LinkedIn d'Harlem.
+     Le commentaire arrive dans le lien, après le « # » : il reste dans le navigateur
+     et n'est jamais envoyé au serveur qui héberge la page.
+     Harlem est daltonien : contrastes forts, jamais la couleur seule. */
+  :root { --ink: #111111; --gris: #374151; --filet: #D1D5DB; --fond: #F6F6F4; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fond); color: var(--ink);
+    font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 24px 16px 48px; }
+  .carte { background: #fff; border: 1px solid var(--filet); border-radius: 16px; overflow: hidden; }
+  .bandeau { padding: 20px 22px; }
+  .bandeau small { display: block; font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+  .bandeau strong { display: block; font-size: 26px; font-weight: 800; margin-top: 2px; }
+  .corps { padding: 22px; }
+  .texte { white-space: pre-wrap; background: #F9FAFB; border: 1px solid var(--filet);
+    border-radius: 12px; padding: 16px; margin: 0 0 20px; font-size: 17px; }
+  button, .lien { display: block; width: 100%; text-align: center; border: 0; border-radius: 12px;
+    font: inherit; font-weight: 700; padding: 16px; cursor: pointer; text-decoration: none; }
+  .principal { background: #0A66C2; color: #fff; font-size: 18px; }
+  .second { background: #fff; color: var(--ink); border: 2px solid var(--ink); margin-top: 12px; }
+  .etat { min-height: 1.6em; margin: 14px 0 0; font-weight: 700; text-align: center; }
+  .note { color: var(--gris); font-size: 14px; margin: 18px 0 0; }
+  .erreur { padding: 22px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="carte" id="carte" hidden>
+    <div class="bandeau" id="bandeau"><small id="sur"></small><strong id="projet"></strong></div>
+    <div class="corps">
+      <p class="texte" id="texte"></p>
+      <button class="principal" id="copier" type="button">1. Copier le commentaire</button>
+      <a class="lien second" id="ouvrir" rel="noopener noreferrer">2. Ouvrir le post sur LinkedIn</a>
+      <p class="etat" id="etat" role="status" aria-live="polite"></p>
+      <p class="note">Rien n'est publié : sur LinkedIn, colle le texte dans la case du commentaire, relis, puis publie toi-même.</p>
+    </div>
+  </div>
+  <div class="carte erreur" id="erreur" hidden>
+    <strong>Ce lien est incomplet.</strong>
+    <p class="note">Rouvre l'e-mail de la veille et copie le commentaire à la main.</p>
+  </div>
+</main>
+<script>
+// Une identité par projet, comme dans les e-mails (modèle A, 22-10-2026).
+const PROJETS = {
+  'reco-bailleur': { nom: 'Reco Bailleur', emoji: '🏠', fond: '#0A2B79', texte: '#FFFFFF' },
+  'rappidos': { nom: 'Rappidos', emoji: '🧾', fond: '#31BCB8', texte: '#0A0A1A' }
+};
+const AUTRE = { nom: 'Veille', emoji: '🔎', fond: '#111111', texte: '#FFFFFF' };
+
+function lire() {
+  // Le lien vaut https://…/veille-copie/#<JSON en base64url> : { t: texte, u: adresse du post, p: projet, n: numéro }
+  try {
+    const b64 = location.hash.slice(1).replace(/-/g, '+').replace(/_/g, '/');
+    const octets = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const d = JSON.parse(new TextDecoder().decode(octets));
+    if (typeof d.t !== 'string' || !d.t.trim() || d.t.length > 3000) return null;
+    // Seule une adresse LinkedIn est ouverte : le lien ne peut pas envoyer ailleurs.
+    let u = null;
+    try {
+      const url = new URL(String(d.u));
+      if (url.protocol === 'https:' && /(^|\.)linkedin\.com$/.test(url.hostname)) u = url.href;
+    } catch (e) {}
+    return { t: d.t, u, p: Object.hasOwn(PROJETS, String(d.p)) ? PROJETS[d.p] : AUTRE, n: Number(d.n) === 2 ? 2 : 1 };
+  } catch (e) { return null; }
+}
+
+// La copie démarre pendant l'appui (geste) : Safari sur iPhone l'exige.
+function copier(texte) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(texte).then(() => true, () => copieSecours(texte));
+  }
+  return Promise.resolve(copieSecours(texte));
+}
+// Secours pour les navigateurs qui refusent le presse-papiers moderne.
+function copieSecours(texte) {
+  const zone = document.createElement('textarea');
+  zone.value = texte; zone.style.position = 'fixed'; zone.style.opacity = '0';
+  document.body.appendChild(zone); zone.select(); zone.setSelectionRange(0, texte.length);
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+  zone.remove(); return ok;
+}
+
+const d = lire();
+if (!d) {
+  document.getElementById('erreur').hidden = false;
+} else {
+  const bandeau = document.getElementById('bandeau');
+  bandeau.style.background = d.p.fond; bandeau.style.color = d.p.texte;
+  document.getElementById('sur').textContent = `Veille LinkedIn · commentaire ${d.n}`;
+  document.getElementById('projet').textContent = `${d.p.emoji} ${d.p.nom}`;
+  document.getElementById('texte').textContent = d.t;
+  document.getElementById('carte').hidden = false;
+  const etat = document.getElementById('etat');
+  // Un vrai lien : sur iPhone, il ouvre l'appli LinkedIn plutôt que la page web.
+  const ouvrir = document.getElementById('ouvrir');
+  if (d.u) ouvrir.href = d.u; else ouvrir.hidden = true;
+  document.getElementById('copier').onclick = () => {
+    copier(d.t).then((ok) => {
+      etat.textContent = ok
+        ? (d.u ? '✓ Copié. Appuie maintenant sur « 2. Ouvrir le post sur LinkedIn ».' : '✓ Copié.')
+        : '✗ Copie refusée : appuie longuement sur le texte pour le copier.';
+    });
+  };
+}
+</script>
+</body>
+</html>
